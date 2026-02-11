@@ -1,0 +1,39 @@
+{
+  "name": "api-hit-monitoring",
+  "version": "1.0.0",
+  "description": "Real-Time API Hit Tracking & Monitoring System",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "processor": "node src/modules/processor/consumer.js",
+    "init": "node init-system.js",
+    "init:env": "node init-system.js --generate-env"
+  },
+  "keywords": [
+    "api",
+    "monitoring",
+    "tracking",
+    "analytics"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "pg": "^8.11.3",
+    "amqplib": "^0.10.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

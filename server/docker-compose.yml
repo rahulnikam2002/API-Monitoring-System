@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: api-monitoring-postgres
+    environment:
+      POSTGRES_DB: api_monitoring
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: rahul
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
+    networks:
+      - api-monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d api_monitoring"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  mongo:
+    image: mongo:6.0
+    container_name: api-monitoring-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - api-monitoring-network
+    restart: unless-stopped
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: api-monitoring-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: api_user
+      RABBITMQ_DEFAULT_PASS: secure_password
+      RABBITMQ_DEFAULT_VHOST: api_monitoring
+    ports:
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - api-monitoring-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # pgAdmin (PostgreSQL web UI)
+  pgadmin:
+    image: dpage/pgadmin4:7
+    container_name: api-monitoring-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - api-monitoring-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
