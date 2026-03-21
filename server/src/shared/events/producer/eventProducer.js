@@ -1,7 +1,17 @@
 import { EVENT_TYPES } from "../eventContracts.js";
 import { isRetryable } from "./RetryStrategy.js"
 
-
+/**
+ * EventProducer is responsible for publishing events to a RabbitMQ queue with reliability features such as retry logic and circuit breaking. It manages a confirm channel to ensure messages are acknowledged by the broker, and it implements a retry strategy with exponential backoff and jitter to handle transient failures. The producer also tracks metrics for published messages, failed attempts, and exhausted retries, and it provides a shutdown method to gracefully close the channel when the application is terminating.
+ * @class EventProducer
+ * @constructor
+ * @param {Object} dependencies - The dependencies required by the EventProducer.
+ * @param {ConfirmChannelManager} dependencies.channelManager - The channel manager for RabbitMQ.
+ * @param {CircuitBreaker} dependencies.circuitBreaker - The circuit breaker instance.
+ * @param {RetryStrategy} dependencies.retryStrategy - The retry strategy instance.
+ * @param {Object} [dependencies.logger] - Optional logger instance.
+ * @param {string} dependencies.queueName - The name of the RabbitMQ queue.
+ */
 export class EventProducer {
     constructor({ channelManager, circuitBreaker, retryStrategy, logger, queueName }) {
         if (!channelManager) throw new Error('EventProducer requires channelManager');
@@ -24,10 +34,22 @@ export class EventProducer {
         this._shuttingDown = false
     }
 
+    /**
+     * Increments the specified metric by 1.
+     * @param {string} metric - The name of the metric to increment.
+     * @private
+     */
     _incrementMetric(metric) {
         this._metrics[metric] = (this._metrics[metric] || 0) + 1
     };
 
+    /**
+     * Publishes an API hit event to the RabbitMQ queue.
+     * @param {Object} eventData - The data for the API hit event.
+     * @param {Object} [opts] - Optional parameters for publishing.
+     * @param {string} [opts.correlationId] - Optional correlation ID for the event.
+     * @returns {Promise<boolean>} - Resolves to true if the event was published successfully, false otherwise.
+     */
     async publishApiHit(eventData, opts = {}) {
         if (this._shuttingDown) {
             const error = new Error("EventProducer is shutting down");
@@ -38,6 +60,7 @@ export class EventProducer {
             throw error;
         }
 
+        // Check circuit breaker before attempting to publish the event. If the circuit is open, we reject the publish attempt immediately to avoid overwhelming the message broker and to allow it time to recover. This also helps to fail fast and provide quicker feedback to the caller about the unavailability of the service.
         if (!this._circuitBreaker.allowRequest()) {
             this._logger.info('[EventProducer] circuit breaker rejected publish', {
                 eventId: eventData.eventId,
@@ -92,6 +115,14 @@ export class EventProducer {
     }
 
 
+    /**
+     * Publishes a message to the RabbitMQ queue.
+     * @param {Object} eventData - The data for the event.
+     * @param {Object} param1 - Additional options for publishing.
+     * @param {string} param1.correlationId - The correlation ID for the event.
+     * @param {number} param1.attempt - The current attempt number.
+     * @returns {Promise<void>} - Resolves when the message is successfully published.
+     */
     async _publish(eventData, { correlationId, attempt }) {
         const channel = await this._channelManager.getChannel();
 
@@ -141,6 +172,9 @@ export class EventProducer {
         })
     }
 
+    /**
+     * Shuts down the EventProducer by closing the RabbitMQ channel and preventing new publish attempts. This method should be called during application shutdown to ensure that resources are cleaned up properly. Once shutdown is initiated, any new publish attempts will be rejected with an error indicating that the producer is shutting down.
+     */
     async shutdown() {
         this._shuttingDown = true;
         this._logger.info('[EventProducer] shutting down…');
@@ -149,6 +183,10 @@ export class EventProducer {
     };
 
 
+    /**
+     *  Gets the current metrics and circuit breaker state for monitoring purposes. This method can be used to expose an endpoint for health checks or to integrate with monitoring tools to track the performance and reliability of the event producer.
+     * @returns {Object} - An object containing the current metrics and circuit breaker state.
+     */
     getStats() {
         return {
             metrics: { ...this._metrics },
