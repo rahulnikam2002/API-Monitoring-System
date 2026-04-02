@@ -27,7 +27,7 @@ export class IngestService {
             const event = {
                 eventId: uuidv4(),
                 timestamp: new Date(),
-                serverName: hitData.serviceName,
+                serviceName: hitData.serviceName,
                 endpoint: hitData.endpoint,
                 method: hitData.method.toUpperCase(),
                 statusCode: parseInt(hitData.statusCode, 10),
