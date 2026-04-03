@@ -14,6 +14,7 @@ import cookieParser from "cookie-parser"
 import authRouter from "./services/auth/routes/authRouter.js";
 import clientRouter from './services/client/routes/clientRoutes.js';
 import ingestRouter from "./services/ingest/routes/ingestRoutes.js"
+import ShutdownManager from './shared/config/shutdown.js';
 
 /**
  * Initialize Express app
@@ -138,44 +139,15 @@ async function startServer() {
         });
 
 
-        const gracefulShutdown = async (signal) => {
-            logger.info(`${signal} received, shutting down gracefully...`);
+        // Initialize shutdown manager
+        const shutdownManager = new ShutdownManager(logger);
 
-            server.close(async () => {
-                logger.info("HTTP server closed");
+        shutdownManager.register("MongoDB", () => mongodb.disconnect());
+        shutdownManager.register("PostgreSQL", () => postgres.close());
+        shutdownManager.register("RabbitMQ", () => rabbitmq.close());
 
-                try {
-                    await mongodb.disconnect();
-                    await postgres.close();
-                    await rabbitmq.close();
-                    logger.info('All connections closed, exiting process');
-                    process.exit(0);
-                } catch (error) {
-                    logger.error('Error during shutdown:', error);
-                    process.exit(1);
-                }
-            })
+        shutdownManager.init(server);
 
-            setTimeout(() => {
-                logger.error("Forced shutdown")
-                process.exit(1);
-            }, 10000);
-
-        }
-
-        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-        // Handle uncaught exceptions
-        process.on('uncaughtException', (error) => {
-            logger.error('Uncaught Exception:', error);
-            gracefulShutdown('uncaughtException');
-        });
-
-        process.on('unhandledRejection', (reason, promise) => {
-            logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-            gracefulShutdown('unhandledRejection');
-        });
 
     } catch (error) {
         logger.error('Failed to start server:', error);
